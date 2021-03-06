@@ -1,4 +1,4 @@
-## SonLogger - Unauthenticated Arbitrary File Upload (Metasploit)
+## CVE-2021-27964 | SonLogger - Unauthenticated Arbitrary File Upload (Metasploit)
 
 * Date: 30-01-2021
 * Exploit Author: Berkan Er <b3rsec@protonmail.com>
@@ -15,7 +15,7 @@ This module exploits an unauthenticated arbitrary file upload via insecure POST 
 
 ---
 
-## SonLogger - Insecure SuperAdmin Creation (Python)
+## CVE-2021-27963 | SonLogger - Insecure SuperAdmin Creation (Python)
 
 * Date: 30-01-2021
 * Exploit Author: Berkan Er <b3rsec@protonmail.com>
