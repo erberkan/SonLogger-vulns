@@ -27,8 +27,8 @@ class MetasploitModule < Msf::Exploit::Remote
           ],
         'References' =>
           [
-            ['CVE', 'CVE-2021-27964'],
-            ['URL', 'https://erberkan.github.io/']
+            ['CVE', '2021-27964'],
+            ['URL', 'https://erberkan.github.io/2021/SonLogger-vulns/']
           ],
 
         'Platform' => ['win'],
